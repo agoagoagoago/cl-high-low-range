@@ -6,8 +6,43 @@ Time-weighted high/low range projection for **CLU26** (Crude Oil WTI Sep '26).
 
 | File | Role |
 |---|---|
-| `clu26_price_history.csv` | The dataset. Single source of truth. |
+| `clu26_price_history.csv` | The dataset. **System of record.** |
 | `analyze.py` | Runs the weighting, integrity checks, and projection. |
+| `web/algo.js` | Same algorithm in JS, for the browser. Must stay in parity. |
+| `web/parity.test.mjs` | Asserts `algo.js` == `analyze.py`. The only guard against drift. |
+| `web/app.js`, `index.html`, `styles.css` | The web UI. |
+| `web/seed.js` | Generated from the CSV — do not hand-edit. |
+
+## Web app
+
+Live: **https://cl-high-low-range.vercel.app** ·
+Repo: `agoagoagoago/cl-high-low-range` (public) · static, no build step, zero deps.
+
+`Ctrl+Q` (or `Ctrl+Shift+V`, or the Paste button) opens a modal, pre-fills from the
+clipboard where permitted, previews the parsed rows, and appends on confirm. State lives
+in `localStorage` under `clu26.rows.v1`, seeded from `seed.js` on first load.
+
+Redeploy with `vercel deploy --prod`. **Run `node web/parity.test.mjs` first** — the
+algorithm exists in two languages and that test is what keeps them honest. If you change
+`analyze.py`, change `algo.js` to match (and vice versa), then re-run it.
+
+Regenerate the seed after editing the CSV, or the page's baseline goes stale:
+
+```
+node -e "…"   # see git history for the generator, or rebuild seed.js from the CSV
+```
+
+### Two stores — keep them reconciled
+
+The webpage's `localStorage` and `clu26_price_history.csv` are **separate stores that can
+diverge.** A day pasted into the page does not reach the CSV, and clearing browser data
+loses it. The CSV on disk stays the system of record.
+
+- Data pasted **in chat** → append to the CSV (the standing instruction below), then
+  regenerate `seed.js` and redeploy if the page should show it.
+- Data pasted **into the page** → user must hit **Download CSV** and replace the file on
+  disk. Say so whenever they mention adding data via the web UI.
+- If the two disagree, the CSV wins.
 
 ## STANDING INSTRUCTION — when the user pastes new price data
 
