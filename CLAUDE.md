@@ -1,0 +1,161 @@
+# CL High/Low Range
+
+Time-weighted high/low range projection for **CLU26** (Crude Oil WTI Sep '26).
+
+## Files
+
+| File | Role |
+|---|---|
+| `clu26_price_history.csv` | The dataset. Single source of truth. |
+| `analyze.py` | Runs the weighting, integrity checks, and projection. |
+
+## STANDING INSTRUCTION — when the user pastes new price data
+
+Every time the user pastes one or more new dates, do **both** steps, in order, without
+being asked again:
+
+1. **Append the row(s) to `clu26_price_history.csv`.**
+2. **Re-run the calculation** (`python analyze.py`) and report the updated projection.
+
+Pasting data is an implicit request for the full updated analysis. Never just append and
+stop; never just calculate without persisting. If a paste is ambiguous or malformed, ask
+before writing — do not guess at a value.
+
+### Appending rules
+
+- **Sort order is load-bearing.** The file is oldest → newest, and row position *is* the
+  weight (`W_i = i`). Insert new dates in date order. `analyze.py` re-sorts defensively,
+  but keep the file correct on disk.
+- **Format:** `MM/DD/YYYY`, thousands separators stripped from Volume/OpenInt
+  (`214540`, not `214,540`). Keep the `+`/`-` sign on Change and %Change.
+- **Missing cells stay empty.** Never zero-fill. A `0` volume is a fabricated value that
+  silently corrupts later analysis. A row is kept as long as High, Low, and Close are all
+  present; those three are all the algorithm consumes.
+- **Duplicate date:** treat the newer paste as a revision — replace the existing row and
+  say so in the response. Do not create a second row for the same date.
+- **Never fabricate, interpolate, or fill a gap from memory.** If data is missing, say so.
+
+## The algorithm
+
+### Part 1: Linearly Weighted Historical Averages
+
+For N days sorted oldest (`i=1`) to newest (`i=N`):
+
+- `W_i = i`, so `ΣW = N(N+1)/2`
+- `Weighted Avg High = Σ(High_i · W_i) / ΣW`
+- `Weighted Avg Low  = Σ(Low_i · W_i) / ΣW`
+- `WDR (Weighted Avg Daily Range) = Σ((High_i − Low_i) · W_i) / ΣW`
+- `Weighted Avg Close = Σ(Close_i · W_i) / ΣW` — needed for the momentum test
+
+### Part 2: Projection Model
+
+Projection from the latest close:
+
+- `Expected Low  = Close_latest − 0.5 · WDR`
+- `Expected High = Close_latest + 0.5 · WDR`
+- Pivot = `Close_latest`
+- Momentum: bullish if `Close_latest > Weighted Avg Close`, bearish if below
+- Validation: `span ≥ WDR`
+
+**Momentum tilt is deliberately not applied numerically.** The spec says to bias the
+range "slightly" but defines no coefficient. Inventing one would fabricate a parameter,
+so the band stays symmetric and momentum is reported as direction only. If the user ever
+supplies a coefficient, apply it and state the figure explicitly.
+
+### Part 3: Market Structure (Pivot Points)
+
+Using **only the most recent day's** `High`, `Low`, `Close`, calculate standard floor
+pivots to identify structural support and resistance:
+
+- `P  = (High_latest + Low_latest + Close_latest) / 3`
+- `R1 = (2 · P) − Low_latest`
+- `S1 = (2 · P) − High_latest`
+- `R2 = P + (High_latest − Low_latest)`
+- `S2 = P − (High_latest − Low_latest)`
+
+Note this `P` is the *floor pivot* and is a different quantity from the Part 2 pivot
+(`Close_latest`). Report both; do not conflate them.
+
+### Part 4: Confluence Adjustment (The Final Range)
+
+Compare the Part 2 Expected High/Low against the Part 3 pivots. Levels act as structural
+magnets:
+
+- If Expected High is very close to `R1` or `R2`, snap the final Expected High to it.
+- If Expected Low is very close to `S1` or `S2`, snap the final Expected Low to it.
+- When both candidates qualify, snap to the **nearest** one.
+
+**"Very close" threshold — `SNAP_THRESHOLD` in `analyze.py`, currently `0.25 × WDR`.**
+The spec does not define the tolerance, and unlike the Part 2 momentum tilt this one
+cannot be left unapplied without making Part 4 a no-op. So it is set explicitly rather
+than silently: a quarter of the average daily range. This is a tuning knob, not a
+derived constant — `analyze.py` prints a sensitivity table showing where each snap
+decision flips, and **the report must disclose the threshold used and any snap that
+fired.** Change the constant if the user prefers a tighter or looser magnet.
+
+After snapping, re-check `span ≥ WDR`. Snapping can widen or narrow the band; if it
+narrows it below WDR, report the violation rather than silently re-widening.
+
+## Reporting
+
+Show the arithmetic in a `<thinking>` block first, then emit the report wrapped in
+`<analysis_report>` tags with these sections in this order:
+
+```
+## Extracted Historical Data
+    Markdown table, sorted oldest -> newest:
+    Date | Open | High | Low | Latest | Change | %Change | Volume | Open Int
+
+## Time-Weighted Historical Analysis
+    * Total Days Analyzed (N):        [count, plus first/last date]
+    * Weighted Average High:          [2dp]
+    * Weighted Average Low:           [2dp]
+    * Weighted Average Daily Range:   [2dp]
+
+## Today's Projected Price Range
+    * Expected Low:                   [final, post-confluence]
+    * Expected High:                  [final, post-confluence]
+    * Expected Pivot / Center:        [Close_latest]
+    * Key Pivot Levels:               [list P, R1, R2, S1, S2]
+    * Confluence Notes:               [whether the projected high/low aligns with any
+                                       major pivot support/resistance]
+    * Confidence Level / Rationale:   [how momentum and weighted volatility shaped
+                                       the boundary]
+
+## Summary & Key Takeaways
+    2-3 actionable insights: momentum, volatility trend, critical S/R levels.
+```
+
+Always state N and the first/last dates so the window is visible.
+
+**Key Pivot Levels** — list all five from Part 3, high to low (`R2, R1, P, S1, S2`), so
+the ladder reads top-down. Label `P` as the *floor pivot* to keep it distinct from the
+Part 2 pivot (`Close_latest`), which appears one line above it.
+
+**Confluence Notes** — state for each side whether a snap fired, which level, and the
+pre-snap distance. Report distances, not just verdicts: a 0.08 gap and a 0.54 gap both
+"snap" under the current threshold but carry very different conviction. Say plainly when
+a snap is threshold-sensitive (would flip under a tighter tolerance) and when it is
+robust. If no snap fires, say so — silence reads as though the question was skipped.
+
+### Two caveats to keep repeating
+
+1. **The `span ≥ WDR` validation is vacuous.** A symmetric `±0.5·WDR` band always equals
+   WDR exactly. It catches arithmetic errors, nothing more — never present it as evidence
+   the band is correctly sized.
+2. **Check WDR against recent realized volatility.** `analyze.py` prints the last-10-day
+   simple mean range and warns when it exceeds WDR by >15%. As of 07/30/2026 recent vol
+   ran ~24% above WDR, meaning the band was too narrow. Surface this whenever it fires;
+   the projected range is a high-probability core zone, not a hard boundary.
+
+## Scope
+
+Statistical range projection from historical OHLC only. No knowledge of the live session,
+inventory reports, or OPEC headlines. Not a trade recommendation — say so in the report.
+
+## Data provenance
+
+Barchart (`barchart.com/futures/quotes/CLU26/price-history/historical`), pasted manually
+from the browser. **The page cannot be fetched** — the table renders client-side, so an
+HTTP fetch returns an empty JS shell with unpopulated `[[ item.lastPrice ]]` placeholders.
+Do not retry the URL expecting rows; ask the user to paste or export CSV instead.

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLU26 Range Projector</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛢️</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <h1>CLU26 Range Projector</h1>
+    <span class="sub" id="window-label">loading…</span>
+  </div>
+  <div class="actions">
+    <button id="btn-paste" class="primary">Paste data <kbd>Ctrl</kbd>+<kbd>Q</kbd></button>
+    <button id="btn-csv">Download CSV</button>
+    <button id="btn-reset" class="ghost">Reset to seed</button>
+  </div>
+</header>
+
+<div id="ff-banner" class="banner warn" hidden>
+  <strong>Firefox detected.</strong> <kbd>Ctrl</kbd>+<kbd>Q</kbd> quits Firefox and a page
+  cannot intercept it. Use <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> or the
+  <em>Paste data</em> button instead.
+  <button class="link" data-dismiss>dismiss</button>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<main>
+  <!-- ---------- headline projection ---------- -->
+  <section class="card hero">
+    <h2>Today's Projected Range</h2>
+    <div class="range">
+      <div class="bound low">
+        <span class="lbl">Expected Low</span>
+        <span class="val" id="final-low">—</span>
+        <span class="note" id="low-note"></span>
+      </div>
+      <div class="spacer" aria-hidden="true"></div>
+      <div class="bound pivot">
+        <span class="lbl">Pivot / Center</span>
+        <span class="val" id="pivot">—</span>
+        <span class="note">Close<sub>latest</sub></span>
+      </div>
+      <div class="spacer" aria-hidden="true"></div>
+      <div class="bound high">
+        <span class="lbl">Expected High</span>
+        <span class="val" id="final-high">—</span>
+        <span class="note" id="high-note"></span>
+      </div>
+    </div>
+    <p class="momentum" id="momentum"></p>
+  </section>
+
+  <div class="grid">
+    <!-- ---------- pivots ---------- -->
+    <section class="card">
+      <h2>Key Pivot Levels <span class="tag">Part 3</span></h2>
+      <p class="hint" id="pivot-src"></p>
+      <table class="ladder" id="pivot-table"></table>
+      <p class="hint">
+        <strong>P</strong> is the <em>floor pivot</em> — a different quantity from the
+        Part 2 pivot (Close<sub>latest</sub>) shown above.
+      </p>
+    </section>
+
+    <!-- ---------- weighted stats ---------- -->
+    <section class="card">
+      <h2>Time-Weighted Analysis <span class="tag">Part 1</span></h2>
+      <table class="kv" id="stats-table"></table>
+      <p class="hint" id="vol-check"></p>
+    </section>
+  </div>
+
+  <!-- ---------- confluence ---------- -->
+  <section class="card">
+    <h2>Confluence Notes <span class="tag">Part 4</span></h2>
+    <p id="confluence-summary"></p>
+    <table class="kv" id="confluence-table"></table>
+    <details>
+      <summary>Threshold sensitivity — where each snap decision flips</summary>
+      <table class="grid-table" id="sensitivity-table"></table>
+      <p class="hint">
+        The tolerance is a tuning knob, not a derived constant. Current value:
+        <code id="thr-label"></code>.
+      </p>
+    </details>
+  </section>
+
+  <!-- ---------- integrity ---------- -->
+  <section class="card">
+    <h2>Integrity Checks</h2>
+    <ul class="checks" id="checks"></ul>
+  </section>
+
+  <!-- ---------- data ---------- -->
+  <section class="card">
+    <h2>Historical Data <span class="tag" id="row-count"></span></h2>
+    <p class="hint">
+      Sorted oldest → newest. Row position <em>is</em> the linear weight (W<sub>i</sub> = i),
+      so the newest day carries the most influence.
+    </p>
+    <div class="scroll">
+      <table class="data" id="data-table"></table>
+    </div>
+  </section>
+
+  <p class="disclaimer">
+    Statistical range projection from historical OHLC only. No knowledge of the live
+    session, inventory reports, or OPEC headlines. <strong>Not a trade recommendation.</strong>
+    <br>
+    Your browser's local storage holds the working copy; the on-disk
+    <code>clu26_price_history.csv</code> remains the system of record — use
+    <em>Download CSV</em> to keep it in sync.
+  </p>
+</main>
+
+<!-- ---------- paste modal ---------- -->
+<dialog id="modal">
+  <form method="dialog" id="paste-form">
+    <h2>Paste the day's data</h2>
+    <p class="hint">
+      Barchart's vertical copy format (one field per line) or CSV. Multiple days at once
+      are fine. A date already present will <strong>replace</strong> that row.
+    </p>
+    <textarea id="paste-area" rows="10" spellcheck="false"
+      placeholder="07/31/2026&#10;83.50&#10;85.20&#10;82.10&#10;84.00&#10;+0.41&#10;+0.49%&#10;100,000&#10;260,000"></textarea>
+    <div id="preview" class="preview" hidden></div>
+    <menu>
+      <button type="button" id="btn-cancel" class="ghost">Cancel</button>
+      <button type="button" id="btn-check">Preview</button>
+      <button type="button" id="btn-commit" class="primary" disabled>Add to dataset</button>
+    </menu>
+  </form>
+</dialog>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
