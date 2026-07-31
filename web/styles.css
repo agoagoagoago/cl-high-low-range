@@ -57,6 +57,8 @@ h2 {
 .brand { display: flex; flex-direction: column; gap: 0.15rem; }
 .sub { font-size: 0.8rem; color: var(--muted); font-family: var(--mono); }
 .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+/* Controls stay out of sight until Ctrl+Q reveals them; re-hidden on every load. */
+.actions.locked { display: none; }
 
 button {
   font: inherit; font-size: 0.85rem;

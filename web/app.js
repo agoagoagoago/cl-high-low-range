@@ -440,11 +440,17 @@ async function reset() {
  * Wiring
  * ============================================================ */
 
+/** The toolbar is hidden until a shortcut reveals it, and re-hides on reload. */
+function revealActions() {
+  $("actions").classList.remove("locked");
+}
+
 document.addEventListener("keydown", (e) => {
   const mod = e.ctrlKey || e.metaKey;
-  if (mod && !e.shiftKey && (e.key === "q" || e.key === "Q")) { e.preventDefault(); openModal("add"); }
-  if (mod && e.shiftKey && (e.key === "v" || e.key === "V")) { e.preventDefault(); openModal("add"); }
-  if (mod && e.shiftKey && (e.key === "e" || e.key === "E")) { e.preventDefault(); openModal("edit"); }
+  const hit = (k) => e.key === k || e.key === k.toUpperCase();
+  if (mod && !e.shiftKey && hit("q")) { e.preventDefault(); revealActions(); openModal("add"); }
+  if (mod && e.shiftKey && hit("v")) { e.preventDefault(); revealActions(); openModal("add"); }
+  if (mod && e.shiftKey && hit("e")) { e.preventDefault(); revealActions(); openModal("edit"); }
 });
 
 $("btn-paste").addEventListener("click", () => openModal("add"));
@@ -475,6 +481,7 @@ document.addEventListener("click", (e) => {
   const tr = e.target.closest?.("#data-table tbody tr");
   if (!tr) return;
   const date = tr.children[1]?.textContent;
+  revealActions();
   openModal("edit").then(() => {
     const ta = $("edit-area");
     const at = ta.value.indexOf(date);
@@ -510,7 +517,8 @@ if (navigator.userAgent.includes("Firefox")) {
       const b = $("fs-banner");
       $("fs-msg").innerHTML =
         `<strong>${esc(handle.name)}</strong> is linked but needs permission again after a browser restart — ` +
-        `click <em>CSV linked</em> to re-grant, or changes stay in the browser.`;
+        `press <kbd>Ctrl</kbd>+<kbd>Q</kbd>, then click <em>CSV linked</em> to re-grant, ` +
+        `or changes stay in the browser.`;
       b.hidden = false;
       b.querySelector("[data-dismiss]").addEventListener("click", () => { b.hidden = true; });
     }
