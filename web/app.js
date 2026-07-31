@@ -1,9 +1,14 @@
-import { SEED } from "./seed.js";
+import { getInstrument } from "./instruments.js";
 import {
   parseInput, validateRow, sortRows, mergeRows, computeAll, toCSV, SNAP_THRESHOLD,
 } from "./algo.js";
 
-const STORE = "clu26.rows.v1";
+// Which instrument this page is. Everything storage-related keys off this, so the two
+// pages never touch each other's data.
+const CFG = getInstrument(document.body.dataset.instrument);
+const SEED = CFG.seed;
+const STORE = CFG.store;
+
 const $ = (id) => document.getElementById(id);
 const f2 = (v) => (v == null ? "—" : v.toFixed(2));
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -23,7 +28,7 @@ let fileHandle = null;  // FileSystemFileHandle for clu26_price_history.csv
 const idb = {
   open() {
     return new Promise((res, rej) => {
-      const r = indexedDB.open("clu26", 1);
+      const r = indexedDB.open(CFG.idb, 1);
       r.onupgradeneeded = () => r.result.createObjectStore("kv");
       r.onsuccess = () => res(r.result);
       r.onerror = () => rej(r.error);
@@ -327,6 +332,30 @@ async function commit() {
 function render() {
   const r = computeAll(rows);
 
+  // No history yet (a fresh instrument). Every statistic is undefined at N=0, so show
+  // the empty state rather than a screen of NaNs.
+  const empty = r === null;
+  $("empty-state").hidden = !empty;
+  for (const el of document.querySelectorAll("main > .card, main > .grid, main > .disclaimer")) {
+    el.hidden = empty;
+  }
+  if (empty) {
+    $("window-label").textContent = "no data yet";
+    $("row-count").textContent = "0 days";
+    return;
+  }
+
+  // Linear weighting over a handful of days says very little; don't dress it up.
+  const small = $("small-sample");
+  small.hidden = r.N >= 10;
+  if (r.N < 10) {
+    small.innerHTML = `<strong>Only ${r.N} day${r.N === 1 ? "" : "s"} of history.</strong> ` +
+      `The weighted averages and the pivot-based range are computed correctly, but a ` +
+      `sample this small carries little information — the newest day alone holds ` +
+      `${((r.N / r.W) * 100).toFixed(0)}% of the total weight. Treat the projection as ` +
+      `indicative until roughly 20+ days have accumulated.`;
+  }
+
   $("window-label").textContent =
     `N = ${r.N}  ·  ${rows[0].date} → ${rows[r.N - 1].date}  ·  ΣW = ${r.W}`;
   $("row-count").textContent = `${r.N} days`;
@@ -422,18 +451,19 @@ function downloadCSV() {
   const blob = new Blob([toCSV(rows)], { type: "text/csv" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "clu26_price_history.csv";
+  a.download = CFG.csv;
   a.click();
   URL.revokeObjectURL(a.href);
   toast("CSV exported to your Downloads folder.");
 }
 
 async function reset() {
-  if (!confirm(`Discard the working copy (${rows.length} rows) and return to the ${SEED.length}-row baseline?` +
+  const target = SEED.length ? `return to the ${SEED.length}-row baseline` : "clear all data";
+  if (!confirm(`Discard the working copy (${rows.length} rows) and ${target}?` +
     (fileHandle ? `\n\nThis also OVERWRITES ${fileHandle.name} on disk.` : ""))) return;
   localStorage.removeItem(STORE);
   rows = sortRows(SEED);
-  await persist(`reset to the ${rows.length}-row seed`);
+  await persist(SEED.length ? `reset to the ${rows.length}-row seed` : "cleared all data");
 }
 
 /* ============================================================ *
@@ -501,6 +531,13 @@ if (navigator.userAgent.includes("Firefox")) {
 /* ---------------- boot ---------------- */
 
 (async function boot() {
+  // Navigation and labels come from the instrument config, so the two pages' markup
+  // stays identical apart from the title.
+  const sw = $("switch-link");
+  sw.href = CFG.other.href;
+  sw.innerHTML = `${esc(CFG.other.label)} &rarr;`;
+  $("btn-reset").textContent = SEED.length ? "Reset to seed" : "Clear data";
+
   rows = loadLocal();
   render();
 
@@ -526,7 +563,7 @@ if (navigator.userAgent.includes("Firefox")) {
     const b = $("fs-banner");
     $("fs-msg").innerHTML =
       `This browser cannot write files directly — <strong>Chrome or Edge</strong> is needed to ` +
-      `update <code>clu26_price_history.csv</code> in place. Everything else works; use ` +
+      `update <code>${esc(CFG.csv)}</code> in place. Everything else works; use ` +
       `<em>Download CSV</em> to save changes.`;
     b.hidden = false;
     b.querySelector("[data-dismiss]").addEventListener("click", () => { b.hidden = true; });

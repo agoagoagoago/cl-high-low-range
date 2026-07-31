@@ -154,5 +154,52 @@ check("out-of-range Last is flagged", validateRow(bad.rows[0]).length > 0, true)
 const inverted = parseInput("08/01/2026\n80\n70\n90\n75\n0\n0%");
 check("High < Low is flagged", validateRow(inverted.rows[0]).length > 0, true);
 
+// --- Instrument isolation: the guard against two pages eating each other's data ----
+console.log("\n=== INSTRUMENT ISOLATION ===");
+const { INSTRUMENTS } = await import("./instruments.js");
+const all = Object.values(INSTRUMENTS);
+for (const field of ["store", "idb", "csv"]) {
+  const vals = all.map((i) => i[field]);
+  check(`${field} unique across instruments`, new Set(vals).size, vals.length);
+}
+check("instrument count", all.length, 2);
+check("cl seeded with 63 rows", INSTRUMENTS.cl.seed.length, 63);
+check("es starts empty", INSTRUMENTS.es.seed.length, 0);
+check("cl links to es", INSTRUMENTS.cl.other.href, "/es");
+check("es links back to cl", INSTRUMENTS.es.other.href, "/");
+
+// --- Empty dataset must be inspectable, not a stack trace ---------------------
+console.log("\n=== EMPTY DATASET ===");
+let threw = false, emptyResult;
+try { emptyResult = computeAll([]); } catch { threw = true; }
+check("computeAll([]) does not throw", threw, false);
+check("computeAll([]) returns null", emptyResult, null);
+
+// --- The two pages must not drift apart --------------------------------------
+console.log("\n=== PAGE DRIFT ===");
+const norm = (s) => s
+  .replace(/<title>[^<]*<\/title>/, "<title>T</title>")
+  .replace(/<h1>[^<]*<\/h1>/, "<h1>H</h1>")
+  .replace(/data-instrument="\w+"/, 'data-instrument="X"')
+  .replace(/<a class="switch"[^>]*>[^<]*<\/a>/, "<a class=switch>S</a>")
+  .replace(/<text y='\.9em' font-size='90'>[^<]*<\/text>/, "<text>I</text>")
+  .replace(/\r\n/g, "\n");
+const idx = readFileSync(join(HERE, "index.html"), "utf8");
+const esPage = readFileSync(join(HERE, "es.html"), "utf8");
+check("index.html and es.html structurally identical", norm(idx) === norm(esPage), true);
+check("es.html declares its instrument", /data-instrument="es"/.test(esPage), true);
+check("index.html declares its instrument", /data-instrument="cl"/.test(idx), true);
+check("both pages load the same app.js", (idx.match(/src="app\.js"/) || []).length, 1);
+check("es.html loads app.js too", (esPage.match(/src="app\.js"/) || []).length, 1);
+
+// every id app.js reaches for must exist on BOTH pages
+const appSrc = readFileSync(join(HERE, "app.js"), "utf8");
+const wanted = [...appSrc.matchAll(/\$\("([^"]+)"\)/g)].map((m) => m[1]);
+for (const [name, page] of [["index.html", idx], ["es.html", esPage]]) {
+  const ids = new Set([...page.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
+  const missing = wanted.filter((w) => !ids.has(w));
+  check(`${name} has every id app.js uses`, missing.length ? missing.join(",") : 0, 0);
+}
+
 console.log(failures ? `\n*** ${failures} PARITY FAILURE(S) ***` : "\nAll parity checks passed.");
 process.exit(failures ? 1 : 0);

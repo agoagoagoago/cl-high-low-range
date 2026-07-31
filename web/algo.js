@@ -173,8 +173,13 @@ export function integrity(rows, s) {
   ];
 }
 
-/** Full pipeline: Parts 1-4 plus checks. `rows` must already be sorted. */
+/**
+ * Full pipeline: Parts 1-4 plus checks. `rows` must already be sorted.
+ * Returns null for an empty dataset -- a new instrument has no history until the user
+ * pastes some, and every statistic below is undefined at N=0 (SumW would be 0).
+ */
 export function computeAll(rows, threshold = SNAP_THRESHOLD) {
+  if (!rows || rows.length === 0) return null;
   const s = weighted(rows);
   const pv = pivots(s.latest);
   const half = 0.5 * s.wdr;

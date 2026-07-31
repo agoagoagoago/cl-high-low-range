@@ -60,6 +60,29 @@ h2 {
 /* Controls stay out of sight until Ctrl+Q reveals them; re-hidden on every load. */
 .actions.locked { display: none; }
 
+/* Instrument switch. Deliberately OUTSIDE .actions — navigating between the two pages
+   shouldn't require knowing the shortcut. */
+.switch {
+  margin-left: auto; font-size: 0.85rem; text-decoration: none;
+  color: var(--muted); border: 1px solid var(--line); border-radius: 7px;
+  padding: 0.45rem 0.8rem; white-space: nowrap;
+}
+.switch:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ---------- empty state / small-sample notice ---------- */
+.empty {
+  background: var(--panel); border: 1px dashed var(--line);
+  border-radius: var(--radius); padding: 2.4rem 1.5rem; text-align: center;
+}
+.empty h2 { display: block; font-size: 1rem; text-transform: none; letter-spacing: 0; color: var(--ink); }
+.empty p { color: var(--muted); font-size: 0.9rem; max-width: 46ch; margin: 0.5rem auto 0; }
+.empty .hint { font-size: 0.78rem; }
+
+.card.notice {
+  background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink);
+  font-size: 0.85rem;
+}
+
 button {
   font: inherit; font-size: 0.85rem;
   padding: 0.45rem 0.8rem;
