@@ -1,17 +1,22 @@
 # CL High/Low Range
 
-Time-weighted high/low range projection for **CLU26** (Crude Oil WTI Sep '26).
+Time-weighted high/low range projection, run over two instruments:
+**CLU26** (Crude Oil WTI Sep '26) and the **Emini S&P 500**.
 
 ## Files
 
 | File | Role |
 |---|---|
-| `clu26_price_history.csv` | The dataset. **System of record.** |
-| `analyze.py` | Runs the weighting, integrity checks, and projection. |
+| `clu26_price_history.csv` | Crude dataset. **System of record.** |
+| `es_price_history.csv` | Emini dataset. Header only until the user pastes rows. |
+| `analyze.py` | Weighting, integrity checks, projection. **Crude only.** |
 | `web/algo.js` | Same algorithm in JS, for the browser. Must stay in parity. |
-| `web/parity.test.mjs` | Asserts `algo.js` == `analyze.py`. The only guard against drift. |
-| `web/app.js`, `index.html`, `styles.css` | The web UI. |
-| `web/seed.js` | Generated from the CSV — do not hand-edit. |
+| `web/parity.test.mjs` | Asserts `algo.js` == `analyze.py`, plus instrument isolation and page drift. |
+| `web/instruments.js` | Per-instrument config. The isolation boundary — see below. |
+| `web/app.js`, `styles.css` | Shared UI, used by both pages. |
+| `web/index.html` | Crude page. **Edit this one**, then regenerate `es.html`. |
+| `web/es.html` | Emini page. Generated — never hand-edit. |
+| `web/seed.js` | Crude baseline, generated from the CSV — do not hand-edit. |
 
 ## Web app
 
@@ -42,21 +47,33 @@ Empty and small datasets: `computeAll()` returns `null` at N=0 and the page show
 state; under 10 rows it shows a small-sample notice. Both exist because ES ships with no
 history.
 
-`Ctrl+Q` (or `Ctrl+Shift+V`, or the Paste button) opens a modal, pre-fills from the
-clipboard where permitted, previews the parsed rows, and commits on confirm.
-`Ctrl+Shift+E` opens it straight into edit mode; clicking any row in the data table jumps
-to that row's line.
+**The toolbar starts hidden.** The four controls (paste/edit, link CSV, download, reset)
+carry `class="actions locked"` and only appear once a shortcut fires; the state is not
+persisted, so every reload starts hidden again. The instrument switch link sits *outside*
+that group and is always visible — navigation shouldn't require knowing the shortcut.
+This is cosmetic tidying, **not access control**: the page and all its data remain public
+to anyone with the URL.
+
+`Ctrl+Q` (or `Ctrl+Shift+V`, or the Paste button) reveals the toolbar and opens a modal,
+pre-fills from the clipboard where permitted, previews the parsed rows, and commits on
+confirm. `Ctrl+Shift+E` opens it straight into edit mode; clicking any row in the data
+table jumps to that row's line. All of these also reveal the toolbar.
 
 **Two modes:** *Add data* appends/replaces by date. *Edit dataset* exposes the whole
 dataset as editable CSV — change any value, delete a line to drop that day — with a diff
 preview (added / modified / removed) before commit.
 
-**Writing to disk.** The page updates `clu26_price_history.csv` in place via the File
-System Access API. The user clicks *Link CSV file* once and picks the file; the handle is
-stored in IndexedDB (`clu64` → `kv` → `csvHandle`) and survives reloads. On load, if a
-linked handle has permission, the page **reads the dataset from that file**, so the CSV is
-the real source rather than a copy. `localStorage` (`clu26.rows.v1`) is only a cache and
-offline fallback.
+**Writing to disk.** Each page updates *its own* CSV in place via the File System Access
+API. The user clicks *Link CSV file* once and picks the file; the handle is stored in that
+instrument's IndexedDB database (`CFG.idb` → store `kv` → key `csvHandle`) and survives
+reloads. On load, if a linked handle has permission, the page **reads the dataset from
+that file**, so the CSV is the real source rather than a copy. `localStorage` (`CFG.store`)
+is only a cache and offline fallback.
+
+| Instrument | localStorage | IndexedDB | CSV |
+|---|---|---|---|
+| Crude | `clu26.rows.v1` | `clu26` | `clu26_price_history.csv` |
+| Emini | `es.rows.v1` | `es` | `es_price_history.csv` |
 
 Constraints worth remembering before promising anything here:
 - **Chrome/Edge only.** Firefox and Safari have no File System Access API — those browsers
@@ -70,11 +87,46 @@ Redeploy with `vercel deploy --prod`. **Run `node web/parity.test.mjs` first** �
 algorithm exists in two languages and that test is what keeps them honest. If you change
 `analyze.py`, change `algo.js` to match (and vice versa), then re-run it.
 
-Regenerate the seed after editing the CSV, or the page's baseline goes stale:
+**Regenerate `web/es.html` after any edit to `index.html`** (verified to differ only in
+title, `<h1>`, favicon, `data-instrument`, and the switch link):
 
+```bash
+node -e "
+const fs=require('fs'); let h=fs.readFileSync('web/index.html','utf8');
+h=h.replace('<title>Crude Oil Range Projector</title>','<title>Emini S&P 500 Range Projector</title>')
+   .replace('<h1>Crude Oil Range Projector</h1>','<h1>Emini S&amp;P 500 Range Projector</h1>')
+   .replace('data-instrument=\"cl\"','data-instrument=\"es\"')
+   .replace(/(<text y='\.9em' font-size='90'>)[^<]*/, '\$1📈')
+   .replace('href=\"/es\">Emini S&amp;P 500','href=\"/\">Crude Oil');
+fs.writeFileSync('web/es.html',h);"
 ```
-node -e "…"   # see git history for the generator, or rebuild seed.js from the CSV
+
+**Regenerate `web/seed.js` after editing the crude CSV**, or the unlinked baseline goes
+stale (this command reproduces the current `seed.js` byte-for-byte):
+
+```bash
+node -e "
+const fs=require('fs');
+const lines=fs.readFileSync('clu26_price_history.csv','utf8').trim().split(/\r?\n/); lines.shift();
+const rows=lines.map(l=>{const [d,o,h,lo,c,ch,p,v,oi]=l.split(',');const [mm,dd,yy]=d.split('/');
+  const n=s=>(s===undefined||s.trim()==='')?null:Number(String(s).replace(/[,%]/g,''));
+  return {date:d,key:yy+'-'+mm+'-'+dd,open:n(o),high:n(h),low:n(lo),close:n(c),change:n(ch),pct:n(p),vol:n(v),oi:n(oi)};});
+fs.writeFileSync('web/seed.js','// Generated from clu26_price_history.csv -- do not hand-edit.\n// Baseline only: localStorage takes precedence once the user appends a day.\nexport const SEED = '+JSON.stringify(rows).replace(/\},\{/g,'},\n{')+';\n');"
 ```
+
+### Site is public — do not claim otherwise
+
+An attempt to lock the site with Vercel Authentication was made and **did not take
+effect** on the URL that matters. `ssoProtection` is enabled but scoped to
+`prod_deployment_urls_and_all_previews`, which covers `*-hash-team.vercel.app` deployment
+URLs (they 302) but **not** the production alias `cl-high-low-range.vercel.app`, which
+still serves the app to anyone (verified 200, real HTML).
+
+Fixing it needs `deploymentType: "all"`, which the CLI cannot set — `vercel project
+protection --sso` has no scope flag, and the MCP server 404s on this project. It requires
+the dashboard (Settings → Deployment Protection → Vercel Authentication → All
+Deployments) or a REST call with a token. The user declined for now and asked for the
+hidden toolbar instead. Do not describe the site as protected.
 
 ### Keeping the stores reconciled
 
@@ -96,8 +148,8 @@ unsynced copy in `localStorage` and the user must *Download CSV* and replace the
 
 ## STANDING INSTRUCTION — when the user pastes new price data
 
-Every time the user pastes one or more new dates, do **both** steps, in order, without
-being asked again:
+Every time the user pastes one or more new dates **in chat**, do **both** steps, in order,
+without being asked again:
 
 1. **Append the row(s) to `clu26_price_history.csv`.**
 2. **Re-run the calculation** (`python analyze.py`) and report the updated projection.
@@ -105,6 +157,14 @@ being asked again:
 Pasting data is an implicit request for the full updated analysis. Never just append and
 stop; never just calculate without persisting. If a paste is ambiguous or malformed, ask
 before writing — do not guess at a value.
+
+**Which instrument?** This instruction is written for crude. The user's stated intent is
+that **Emini data goes into the web page, not chat.** If Emini rows do arrive in chat,
+don't silently append them to the crude CSV — the prices are an order of magnitude apart,
+so it would corrupt the dataset in a way the integrity checks won't catch (they verify
+`High ≥ Low` per row, not that a row belongs). Confirm which instrument it is, and note
+that `analyze.py` has no ES support yet: it would need a CSV-path argument, and
+`es_price_history.csv` has no seed for `web/seed.js` to mirror.
 
 ### Appending rules
 
@@ -170,7 +230,8 @@ magnets:
 - If Expected Low is very close to `S1` or `S2`, snap the final Expected Low to it.
 - When both candidates qualify, snap to the **nearest** one.
 
-**"Very close" threshold — `SNAP_THRESHOLD` in `analyze.py`, currently `0.25 × WDR`.**
+**"Very close" threshold — `SNAP_THRESHOLD`, currently `0.25 × WDR`. It is defined twice:
+`analyze.py` and `web/algo.js`. Change both, or the parity test fails.**
 The spec does not define the tolerance, and unlike the Part 2 momentum tilt this one
 cannot be left unapplied without making Part 4 a no-op. So it is set explicitly rather
 than silently: a quarter of the average daily range. This is a tuning knob, not a
@@ -235,12 +296,20 @@ robust. If no snap fires, say so — silence reads as though the question was sk
 
 ## Scope
 
-Statistical range projection from historical OHLC only. No knowledge of the live session,
-inventory reports, or OPEC headlines. Not a trade recommendation — say so in the report.
+Statistical range projection from historical OHLC only. No knowledge of the live session
+or any scheduled catalyst — inventory reports and OPEC headlines for crude, CPI/FOMC and
+earnings for the Emini. Not a trade recommendation — say so in the report.
 
 ## Data provenance
 
-Barchart (`barchart.com/futures/quotes/CLU26/price-history/historical`), pasted manually
-from the browser. **The page cannot be fetched** — the table renders client-side, so an
-HTTP fetch returns an empty JS shell with unpopulated `[[ item.lastPrice ]]` placeholders.
-Do not retry the URL expecting rows; ask the user to paste or export CSV instead.
+Barchart, pasted manually from the browser
+(crude: `barchart.com/futures/quotes/CLU26/price-history/historical`).
+
+**Barchart pages cannot be fetched** — the table renders client-side, so an HTTP fetch
+returns an empty JS shell with unpopulated `[[ item.lastPrice ]]` placeholders. This was
+tried and confirmed. Do not retry the URL expecting rows; ask the user to paste, or to
+export CSV.
+
+The paste format is **vertical**: one field per line, nine lines per day, thousands
+separators intact. The parser handles that plus one-row-per-line CSV/TSV, and tolerates a
+short record (the 04/30/2026 crude row has no Volume/OpenInt and must stay that way).
