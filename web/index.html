@@ -15,7 +15,8 @@
     <span class="sub" id="window-label">loading…</span>
   </div>
   <div class="actions">
-    <button id="btn-paste" class="primary">Paste data <kbd>Ctrl</kbd>+<kbd>Q</kbd></button>
+    <button id="btn-paste" class="primary">Paste / edit <kbd>Ctrl</kbd>+<kbd>Q</kbd></button>
+    <button id="btn-link">Link CSV file</button>
     <button id="btn-csv">Download CSV</button>
     <button id="btn-reset" class="ghost">Reset to seed</button>
   </div>
@@ -25,6 +26,11 @@
   <strong>Firefox detected.</strong> <kbd>Ctrl</kbd>+<kbd>Q</kbd> quits Firefox and a page
   cannot intercept it. Use <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> or the
   <em>Paste data</em> button instead.
+  <button class="link" data-dismiss>dismiss</button>
+</div>
+
+<div id="fs-banner" class="banner" hidden>
+  <span id="fs-msg"></span>
   <button class="link" data-dismiss>dismiss</button>
 </div>
 
@@ -121,21 +127,40 @@
 
 <!-- ---------- paste modal ---------- -->
 <dialog id="modal">
-  <form method="dialog" id="paste-form">
-    <h2>Paste the day's data</h2>
-    <p class="hint">
-      Barchart's vertical copy format (one field per line) or CSV. Multiple days at once
-      are fine. A date already present will <strong>replace</strong> that row.
-    </p>
-    <textarea id="paste-area" rows="10" spellcheck="false"
-      placeholder="07/31/2026&#10;83.50&#10;85.20&#10;82.10&#10;84.00&#10;+0.41&#10;+0.49%&#10;100,000&#10;260,000"></textarea>
+  <div id="paste-form">
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab active" id="tab-add" role="tab">Add data</button>
+      <button type="button" class="tab" id="tab-edit" role="tab">Edit dataset</button>
+    </div>
+
+    <!-- ADD -->
+    <div id="pane-add">
+      <p class="hint">
+        Barchart's vertical copy format (one field per line) or CSV. Multiple days at once
+        are fine. A date already present will <strong>replace</strong> that row.
+      </p>
+      <textarea id="paste-area" rows="9" spellcheck="false"
+        placeholder="07/31/2026&#10;83.50&#10;85.20&#10;82.10&#10;84.00&#10;+0.41&#10;+0.49%&#10;100,000&#10;260,000"></textarea>
+    </div>
+
+    <!-- EDIT -->
+    <div id="pane-edit" hidden>
+      <p class="hint">
+        The full dataset as CSV — change any value, or delete a whole line to remove that
+        day. Committing <strong>replaces</strong> the dataset with exactly what is below.
+      </p>
+      <textarea id="edit-area" rows="14" spellcheck="false"></textarea>
+    </div>
+
     <div id="preview" class="preview" hidden></div>
+
     <menu>
+      <span class="target" id="write-target"></span>
       <button type="button" id="btn-cancel" class="ghost">Cancel</button>
       <button type="button" id="btn-check">Preview</button>
       <button type="button" id="btn-commit" class="primary" disabled>Add to dataset</button>
     </menu>
-  </form>
+  </div>
 </dialog>
 
 <script type="module" src="app.js"></script>

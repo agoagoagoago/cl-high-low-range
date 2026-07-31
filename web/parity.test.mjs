@@ -129,5 +129,30 @@ const m2 = mergeRows(rows, fresh);
 check("new date appends", m2.rows.length, 64);
 check("new date sorts last", m2.rows[63].date, "07/31/2026");
 
+// --- Edit mode: full CSV (incl. header) must round-trip through the parser ----
+console.log("\n=== EDIT MODE ===");
+const withHeader = toCSV(rows);
+const reparsed = parseInput(withHeader);
+check("CSV header line ignored", reparsed.errors.length, 0);
+check("edit round-trip row count", reparsed.rows.length, 63);
+check("edit round-trip is lossless", toCSV(sortRows(reparsed.rows)) === withHeader, true);
+
+const edited = withHeader.replace("07/30/2026,84.65,85.94,82.97,83.59",
+                                  "07/30/2026,84.65,88.00,82.97,83.59");
+const afterEdit = computeAll(sortRows(parseInput(edited).rows));
+check("edited High changes WDR", afterEdit.wdr > r.wdr, true);
+check("edited High changes pivots", Math.abs(afterEdit.pivots.P - r.pivots.P) > 0.1, true);
+
+const deleted = withHeader.split("\n").filter((l) => !l.startsWith("07/30/2026")).join("\n");
+const afterDel = parseInput(deleted);
+check("deleting a line removes the day", afterDel.rows.length, 62);
+check("new latest after delete", sortRows(afterDel.rows)[61].date, "07/29/2026");
+
+// a row whose Last sits outside its own High/Low must be caught, not silently kept
+const bad = parseInput("08/01/2026\n80\n82\n79\n95\n0\n0%");
+check("out-of-range Last is flagged", validateRow(bad.rows[0]).length > 0, true);
+const inverted = parseInput("08/01/2026\n80\n70\n90\n75\n0\n0%");
+check("High < Low is flagged", validateRow(inverted.rows[0]).length > 0, true);
+
 console.log(failures ? `\n*** ${failures} PARITY FAILURE(S) ***` : "\nAll parity checks passed.");
 process.exit(failures ? 1 : 0);

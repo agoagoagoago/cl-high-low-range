@@ -209,3 +209,23 @@ dialog menu {
   margin: 0 0 0.4rem; font-size: 0.72rem; text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--muted);
 }
+
+/* ---------- modal tabs ---------- */
+.tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--line); margin-bottom: 0.9rem; }
+.tab {
+  border: none; border-bottom: 2px solid transparent; border-radius: 0;
+  background: none; color: var(--muted); padding: 0.4rem 0.7rem; font-size: 0.85rem;
+}
+.tab:hover { color: var(--ink); border-color: var(--line); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+dialog menu .target {
+  margin-right: auto; font-size: 0.73rem; color: var(--muted);
+  align-self: center; font-family: var(--mono);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 15rem;
+}
+dialog menu .target.linked { color: var(--up); }
+
+.banner .link { color: inherit; }
+#fs-banner { background: var(--panel); color: var(--muted); }
+#fs-banner.ok { background: color-mix(in srgb, var(--up) 12%, transparent); color: var(--up); }

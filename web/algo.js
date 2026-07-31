@@ -61,6 +61,7 @@ export function parseInput(text) {
   for (const rawLine of String(text).split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) continue;
+    if (/^date\s*[,\t]/i.test(line)) continue;   // CSV header, not a record
 
     const m = line.match(DATE_RE);
     if (m) {
