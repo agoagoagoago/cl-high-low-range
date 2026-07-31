@@ -19,8 +19,28 @@ Live: **https://cl-high-low-range.vercel.app** ·
 Repo: `agoagoagoago/cl-high-low-range` (public) · static, no build step, zero deps.
 
 `Ctrl+Q` (or `Ctrl+Shift+V`, or the Paste button) opens a modal, pre-fills from the
-clipboard where permitted, previews the parsed rows, and appends on confirm. State lives
-in `localStorage` under `clu26.rows.v1`, seeded from `seed.js` on first load.
+clipboard where permitted, previews the parsed rows, and commits on confirm.
+`Ctrl+Shift+E` opens it straight into edit mode; clicking any row in the data table jumps
+to that row's line.
+
+**Two modes:** *Add data* appends/replaces by date. *Edit dataset* exposes the whole
+dataset as editable CSV — change any value, delete a line to drop that day — with a diff
+preview (added / modified / removed) before commit.
+
+**Writing to disk.** The page updates `clu26_price_history.csv` in place via the File
+System Access API. The user clicks *Link CSV file* once and picks the file; the handle is
+stored in IndexedDB (`clu64` → `kv` → `csvHandle`) and survives reloads. On load, if a
+linked handle has permission, the page **reads the dataset from that file**, so the CSV is
+the real source rather than a copy. `localStorage` (`clu26.rows.v1`) is only a cache and
+offline fallback.
+
+Constraints worth remembering before promising anything here:
+- **Chrome/Edge only.** Firefox and Safari have no File System Access API — those browsers
+  fall back to *Download CSV*, and the page says so in a banner.
+- Permission usually needs re-granting after a browser restart; the page detects this and
+  shows a banner rather than silently failing to write.
+- Every write goes through `toCSV()`, which round-trips byte-for-byte with the on-disk
+  format (asserted in the parity test).
 
 Redeploy with `vercel deploy --prod`. **Run `node web/parity.test.mjs` first** — the
 algorithm exists in two languages and that test is what keeps them honest. If you change
@@ -32,17 +52,23 @@ Regenerate the seed after editing the CSV, or the page's baseline goes stale:
 node -e "…"   # see git history for the generator, or rebuild seed.js from the CSV
 ```
 
-### Two stores — keep them reconciled
+### Keeping the stores reconciled
 
-The webpage's `localStorage` and `clu26_price_history.csv` are **separate stores that can
-diverge.** A day pasted into the page does not reach the CSV, and clearing browser data
-loses it. The CSV on disk stays the system of record.
+`clu26_price_history.csv` is the system of record. **If the CSV is linked in the browser,
+the page writes to it directly and reads from it on load** — no divergence, nothing to
+reconcile.
 
-- Data pasted **in chat** → append to the CSV (the standing instruction below), then
-  regenerate `seed.js` and redeploy if the page should show it.
-- Data pasted **into the page** → user must hit **Download CSV** and replace the file on
-  disk. Say so whenever they mention adding data via the web UI.
-- If the two disagree, the CSV wins.
+Divergence is only possible when the CSV is *not* linked (Firefox/Safari, permission
+denied, or the user never clicked *Link CSV file*). In that case the page holds an
+unsynced copy in `localStorage` and the user must *Download CSV* and replace the file.
+
+- Data pasted **in chat** → append to the CSV (standing instruction below). If the user
+  has the page open with the file linked, tell them to reload so it picks up the change.
+- Data pasted **into the page** with the CSV linked → already on disk; nothing further.
+- Data pasted **into the page** without linking → remind them to *Download CSV*.
+- After editing the CSV outside the page, regenerate `web/seed.js` and redeploy only if
+  the *unlinked* baseline should change; a linked user reads from disk and ignores the seed.
+- If anything disagrees, the CSV wins.
 
 ## STANDING INSTRUCTION — when the user pastes new price data
 
