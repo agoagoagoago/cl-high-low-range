@@ -15,8 +15,32 @@ Time-weighted high/low range projection for **CLU26** (Crude Oil WTI Sep '26).
 
 ## Web app
 
-Live: **https://cl-high-low-range.vercel.app** ·
 Repo: `agoagoagoago/cl-high-low-range` (public) · static, no build step, zero deps.
+
+**Two instruments, two pages, one codebase:**
+
+| Page | Instrument | Data |
+|---|---|---|
+| https://cl-high-low-range.vercel.app/ | Crude Oil (CLU26) | `clu26_price_history.csv`, 63-row seed |
+| https://cl-high-low-range.vercel.app/es | Emini S&P 500 | `es_price_history.csv`, starts empty |
+
+`web/instruments.js` holds one config per instrument; the page declares which it is via
+`<body data-instrument="cl|es">` and `app.js` resolves it. **`store`, `idb` and `csv` must
+stay unique per instrument** — they are the only thing keeping the two datasets from
+overwriting each other. The parity test asserts uniqueness; do not relax it.
+
+`web/es.html` is a generated near-copy of `index.html`, differing only in title, `<h1>`,
+favicon, `data-instrument`, and the switch link. A parity assertion normalises those and
+requires the files to be otherwise identical — **edit `index.html`, then regenerate
+`es.html`**, never hand-edit one alone.
+
+**ES is web-only.** `analyze.py` and the chat-paste instruction below apply to crude only.
+If the user starts pasting ES data in chat, that decision needs revisiting — `analyze.py`
+would need a CSV-path argument.
+
+Empty and small datasets: `computeAll()` returns `null` at N=0 and the page shows an empty
+state; under 10 rows it shows a small-sample notice. Both exist because ES ships with no
+history.
 
 `Ctrl+Q` (or `Ctrl+Shift+V`, or the Paste button) opens a modal, pre-fills from the
 clipboard where permitted, previews the parsed rows, and commits on confirm.
